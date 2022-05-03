@@ -17,7 +17,7 @@
 //  https://youtube.com/revdancatt
 //
 
-const ratio = 1.41
+const ratio = 1
 // const startTime = new Date().getTime() // so we can figure out how long since the scene started
 let drawn = false
 let highRes = false // display high or low res

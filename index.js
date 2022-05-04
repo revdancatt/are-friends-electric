@@ -1,4 +1,4 @@
-/* global preloadImagesTmr fxhash fxrand paper1Loaded */
+/* global preloadImagesTmr fxhash fxrand paper1Loaded noise */
 
 //
 //  fxhash - background paper
@@ -44,7 +44,7 @@ const makeFeatures = () => {
     }
   }
 
-  features.debug = true
+  features.debug = false
 
   const minGrid = 16
   const maxGrid = 28
@@ -68,8 +68,8 @@ const makeFeatures = () => {
 
   features.maxLength = features.gridSize * (minLengthMod + Math.floor(gridPercent * (maxLengthMod - minLengthMod)))
 
-  features.gridSize = 16
-  features.maxLength = features.gridSize * 16
+  // features.gridSize = 28
+  // features.maxLength = features.gridSize * 22
 
   //  Fill the grid
   for (let y = 0; y <= features.gridSize; y++) {
@@ -391,6 +391,71 @@ const makeFeatures = () => {
       failed = false
     }
   }
+
+  //  Now that we have the lines we need to break them down into smaller amounts
+  features.decimatedLine = []
+  for (let p = 0; p < features.line.length - 1; p++) {
+    const from = {
+      x: features.line[p].x,
+      y: features.line[p].y
+    }
+    const to = {
+      x: features.line[p + 1].x,
+      y: features.line[p + 1].y
+    }
+    const steps = 10
+    for (let s = 0; s < steps; s++) {
+      const diff = {
+        x: to.x - from.x,
+        y: to.y - from.y
+      }
+      const point = {
+        x: from.x + (diff.x * s / steps),
+        y: from.y + (diff.y * s / steps)
+      }
+      features.decimatedLine.push(point)
+    }
+  }
+  features.decimatedLine.push({
+    x: features.line[features.line.length - 1].x,
+    y: features.line[features.line.length - 1].y
+  })
+
+  features.wonkyLineColours = ['magenta', 'cyan', 'yellow']
+  const offsets = [{
+    xShift: 1000,
+    yShift: 900,
+    xMod: 1.5,
+    yMod: 1.5
+  }, {
+    xShift: 1333,
+    yShift: -912,
+    xMod: 2,
+    yMod: 2
+  }, {
+    xShift: -2323,
+    yShift: 1111,
+    xMod: 2.5,
+    yMod: 2.5
+  }]
+  features.wonkyLines = []
+  features.wonkyness = Math.ceil(fxrand() * 4)
+  features.wonkyLineColours.forEach(() => {
+    const noiseOffset = offsets.pop()
+    const newLine = []
+    for (const point of features.decimatedLine) {
+      const offset = {
+        x: noise.perlin2((point.x + noiseOffset.xShift) / noiseOffset.xMod, (point.y + noiseOffset.xShift) / noiseOffset.xMod) / (15 - (features.wonkyness * 2)),
+        y: noise.perlin2((point.x + noiseOffset.yShift) / noiseOffset.yMod, (point.y + noiseOffset.yShift) / noiseOffset.yMod) / (15 - (features.wonkyness * 2))
+      }
+      const newPoint = {
+        x: point.x + offset.x,
+        y: point.y + offset.y
+      }
+      newLine.push(newPoint)
+    }
+    features.wonkyLines.push(newLine)
+  })
   console.log('exitCount: ', exitCount)
   console.log('totalLength: ', totalLength)
   console.log('features.maxLength: ', features.maxLength)
@@ -537,22 +602,32 @@ const drawCanvas = async () => {
   }
 
   //  Draw the line
-  ctx.lineWidth = w / features.gridSize / 5
-  ctx.beginPath()
-  // ctx.lineJoin = 'round'
-  ctx.moveTo(features.line[0].x * cellSize + borderOffset.x, h - (features.line[0].y * cellSize + borderOffset.y))
-  for (let p = 1; p < features.line.length; p++) {
-    const point = features.line[p]
-    ctx.lineTo(point.x * cellSize + borderOffset.x, h - (point.y * cellSize + borderOffset.y))
+  let lineIndex = 0
+  ctx.globalCompositeOperation = 'multiply'
+  for (const colour of features.wonkyLineColours) {
+    const thisLine = features.wonkyLines[lineIndex]
+    ctx.lineWidth = w / features.gridSize / 5
+    ctx.strokeStyle = colour
+    ctx.beginPath()
+    ctx.moveTo(thisLine[0].x * cellSize + borderOffset.x, h - (thisLine[0].y * cellSize + borderOffset.y))
+    for (let p = 1; p < thisLine.length; p++) {
+      const point = thisLine[p]
+      ctx.lineTo(point.x * cellSize + borderOffset.x, h - (point.y * cellSize + borderOffset.y))
+    }
+    ctx.stroke()
+    lineIndex++
   }
-  ctx.stroke()
-
   //  Draw a circle at the end
-  const lastPoint = features.line[features.line.length - 1]
-  ctx.fillStyle = 'black'
-  ctx.beginPath()
-  ctx.arc(lastPoint.x * cellSize + borderOffset.x, h - (lastPoint.y * cellSize + borderOffset.y), w / features.gridSize / 3, 0, 2 * Math.PI)
-  ctx.fill()
+  lineIndex = 0
+  for (const colour of features.wonkyLineColours) {
+    const lastPoint = features.wonkyLines[lineIndex][features.wonkyLines[lineIndex].length - 1]
+    ctx.fillStyle = colour
+    ctx.beginPath()
+    ctx.arc(lastPoint.x * cellSize + borderOffset.x, h - (lastPoint.y * cellSize + borderOffset.y), w / features.gridSize / 3, 0, 2 * Math.PI)
+    ctx.fill()
+    lineIndex++
+  }
+  ctx.globalCompositeOperation = 'source-over'
 
   if (features.debug) {
     //  Draw the walls

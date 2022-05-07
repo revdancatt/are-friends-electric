@@ -19,10 +19,11 @@
 
 const ratio = 1
 // const startTime = new Date().getTime() // so we can figure out how long since the scene started
+let lastAction = new Date().getTime()
 let drawn = false
 let highRes = false // display high or low res
 const features = {}
-const nextFrame = null
+let nextFrame = null
 const NORTH = 0
 const EAST = 1
 const SOUTH = 2
@@ -514,7 +515,7 @@ const makeFeatures = () => {
   //  Now find the empty spaces
   let spaceNeeded = 5
   features.dotted = []
-  const dotLimit = 6
+  const dotLimit = 3
   while (spaceNeeded > 0) {
     for (let y = 0; y < features.gridSize; y++) {
       if (y <= spaceNeeded + 2 || features.gridSize - y < (spaceNeeded + 3)) continue
@@ -556,6 +557,20 @@ const makeFeatures = () => {
     }) => value).slice(0, Math.min(dotLimit, features.dotted.length))
 
   features.spaceNeeded = spaceNeeded
+
+  //  Now we make the bugs
+  features.bugs = []
+  features.maxBugs = 5 + (Math.floor(fxrand() * 10))
+  for (let b = 0; b < features.maxBugs; b++) {
+    const newBug = {
+      position: fxrand(),
+      speed: 1 + (fxrand() - 0.5),
+      direction: 1 - Math.floor(fxrand() * 2) * 2,
+      type: ['square', 'round'][Math.floor(fxrand() * 2)],
+      size: fxrand()
+    }
+    features.bugs.push(newBug)
+  }
   console.log(features)
 }
 
@@ -637,7 +652,7 @@ const layoutCanvas = async () => {
 }
 
 const drawCanvas = async () => {
-  const startDraw = new Date().getTime()
+  // const startDraw = new Date().getTime()
   //  Let the preloader know that we've hit this function at least once
   drawn = true
   //  Make sure there's only one nextFrame to be called
@@ -859,10 +874,59 @@ const drawCanvas = async () => {
     }
   }
 
-  const endDraw = new Date().getTime()
-  console.log((endDraw - startDraw) + 'ms')
+  //  Move the bugs
+  //  Find out how many ms have passed since the last
+  //  time we did something
+  const bugTime = new Date().getTime()
+  const bugDiff = bugTime - lastAction
+  lastAction = bugTime
+  ctx.globalCompositeOperation = 'multiply'
+  //  Work out the length of a line secment as an overall percent
+  const linePercent = 1 / features.wonkyLines[0].length
+  const minCircleSize = w / features.gridSize / 6
+  const maxCircleSize = w / features.gridSize / 3
+  for (const bug of features.bugs) {
+    //  Work out how far we should have moved along
+    //  the line
+    const bugMoveDistance = bugDiff / 1000 * bug.speed * 2 * linePercent
+    bug.position += (bugMoveDistance * bug.direction)
+    while (bug.position >= 1) bug.position -= 1
+    while (bug.position < 0) bug.position += 1
+    //  Work out the start line
+    const startLine = Math.floor(features.wonkyLines[0].length * bug.position)
+    const endLine = startLine + 1
+    const betweenLinesPercent = features.wonkyLines[0].length * bug.position - startLine
+    //  Now draw them three times each
+    const bugColour = ['magenta', 'cyan', 'yellow']
+    //  Doing it for each colour
+    for (const i in bugColour) {
+      ctx.fillStyle = bugColour[i]
+      try {
+        const startPos = {
+          x: features.wonkyLines[i][startLine].x,
+          y: features.wonkyLines[i][startLine].y
+        }
+        const endPos = {
+          x: features.wonkyLines[i][endLine].x,
+          y: features.wonkyLines[i][endLine].y
+        }
+        const bugPos = {
+          x: startPos.x + ((endPos.x - startPos.x) * betweenLinesPercent),
+          y: startPos.y + ((endPos.y - startPos.y) * betweenLinesPercent)
+        }
+
+        ctx.beginPath()
+        ctx.arc(bugPos.x * cellSize + borderOffset.x, h - (bugPos.y * cellSize + borderOffset.y), minCircleSize + ((maxCircleSize - minCircleSize) * bug.size), 0, 2 * Math.PI)
+        ctx.fill()
+      } catch (er) {}
+    }
+  }
+  ctx.globalCompositeOperation = 'source-over'
+
+  // const endDraw = new Date().getTime()
+  // console.log(endDraw - startDraw + 'ms')
   //  Now do it all over again
-  // nextFrame = window.requestAnimationFrame(drawCanvas)
+  nextFrame = window.requestAnimationFrame(drawCanvas)
 }
 
 const autoDownloadCanvas = async (showHash = false) => {

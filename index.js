@@ -66,14 +66,15 @@ const makeFeatures = () => {
   const minLengthMod = 16
   const maxLengthMod = 22
 
+  // features.gridSize = 16
+
   features.maxLength = features.gridSize * (minLengthMod + Math.floor(gridPercent * (maxLengthMod - minLengthMod)))
 
-  // features.gridSize = 28
-  // features.maxLength = features.gridSize * 22
+  // features.maxLength = features.gridSize * 16
 
   //  Fill the grid
-  for (let y = 0; y <= features.gridSize; y++) {
-    for (let x = 0; x <= features.gridSize; x++) {
+  for (let y = 0; y < features.gridSize; y++) {
+    for (let x = 0; x < features.gridSize; x++) {
       const index = `${x},${y}`
       features.grid[index] = {
         westWall: false,
@@ -87,308 +88,361 @@ const makeFeatures = () => {
   //  We're going to keep doing it until we haven't failed, this
   //  is so we can be a bit sketchy about testing edge cases, we
   //  just keep going over and over again until we hit on something that works.
-  let failed = false
-  let ended = false
-  let exitCount = 0
-  let totalLength = 0
+  features.boxes = []
+  while (features.boxes.length < 5) {
+    let failed = false
+    let ended = false
+    let exitCount = 0
+    let totalLength = 0
 
-  while (failed === false && ended === false && exitCount < 100000) {
-    //  we haven't failed yet!
-    failed = false
-    //  Grab the current position
-    const currentPoint = features.line[features.line.length - 1]
-
-    //  Record the walls used into the grid
-    if (currentPoint.facing === NORTH && currentPoint.y <= features.gridSize) features.grid[`${currentPoint.x},${currentPoint.y}`].westWall = true
-    if (currentPoint.facing === EAST && currentPoint.x <= features.gridSize) features.grid[`${currentPoint.x},${currentPoint.y}`].southWall = true
-    if (currentPoint.facing === SOUTH && currentPoint.y - 1 >= 0) features.grid[`${currentPoint.x},${currentPoint.y - 1}`].westWall = true
-    if (currentPoint.facing === WEST && currentPoint.x - 1 >= 0) features.grid[`${currentPoint.x - 1},${currentPoint.y}`].southWall = true
-
-    //  Set the new point to the current postion
-    const newPoint = {
-      x: currentPoint.x,
-      y: currentPoint.y,
-      facing: currentPoint.facing,
-      continuous: currentPoint.continuous + 1
-    }
-    //  Move us
-    if (currentPoint.facing === NORTH) newPoint.y += 1
-    if (currentPoint.facing === EAST) newPoint.x += 1
-    if (currentPoint.facing === SOUTH) newPoint.y -= 1
-    if (currentPoint.facing === WEST) newPoint.x -= 1
-
-    //  Work out which way we should turn
-    let chanceToTurn = 0
-    //  Add a 10% chance to turn for the length of the line
-    chanceToTurn += newPoint.continuous * 10
-    //  Increase the chance to turn as we get closer to the edge
-    //  TODO:
-    //  Set the chance to 100% if we have hit the edge
-    if (newPoint.facing === NORTH && newPoint.y === features.gridSize - 1) chanceToTurn = 100
-    if (newPoint.facing === EAST && newPoint.x === features.gridSize - 1) chanceToTurn = 100
-    if (newPoint.facing === SOUTH && newPoint.y === 1) chanceToTurn = 100
-    if (newPoint.facing === WEST && newPoint.x === 0) chanceToTurn = 100
-
-    //  Increase the chance to turn if we are approaching already filled in walls
-    if (newPoint.facing === NORTH && newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) chanceToTurn = 100
-    if (newPoint.facing === EAST && newPoint.x < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) chanceToTurn = 100
-    if (newPoint.facing === SOUTH && newPoint.y > 2 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) chanceToTurn = 100
-    if (newPoint.facing === WEST && newPoint.x > 2 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) chanceToTurn = 100
-
-    newPoint.chanceToTurn = chanceToTurn
-
-    //  Now roll the dice to see if we turn
-    if (fxrand() <= chanceToTurn / 100) {
-      //  Now go through what where when and how we may turn, there's all sorts
-      //  of super cool algorithms we could use to do this, but we're going to
-      //  do it the old Choose Your Own Adventure way. If we need to we can wrap
-      //  up a couple of checks in a function, but probably not
-      //  Facing north first
-      let canTurnNorth = 0
-      let canTurnEast = 0
-      let canTurnSouth = 0
-      let canTurnWest = 0
-
-      if (currentPoint.facing === NORTH) {
-        canTurnEast = 1
-        canTurnWest = 1
-        //  Check to see if we can actually turn east or west
-        if (newPoint.x - 2 >= 0 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) canTurnWest = 0
-        if (newPoint.x - 1 >= 0 && features.grid[`${newPoint.x - 1},${newPoint.y}`].southWall) canTurnWest = 0
-        if (newPoint.x + 1 < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) canTurnEast = 0
-        if (newPoint.x < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].southWall) canTurnEast = 0
-      }
-
-      if (currentPoint.facing === EAST) {
-        canTurnNorth = 1
-        canTurnSouth = 1
-        //  Check to see if we can actually turn north or south
-        if (newPoint.y - 2 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) canTurnSouth = 0
-        if (newPoint.y - 1 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 1}`].westWall) canTurnSouth = 0
-        if (newPoint.y + 1 < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) canTurnNorth = 0
-        if (newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].westWall) canTurnNorth = 0
-      }
-
-      if (currentPoint.facing === SOUTH) {
-        canTurnEast = 1
-        canTurnWest = 1
-        //  Check to see if we can actually turn east or west
-        if (newPoint.x - 2 >= 0 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) canTurnWest = 0
-        if (newPoint.x - 1 >= 0 && features.grid[`${newPoint.x - 1},${newPoint.y}`].southWall) canTurnWest = 0
-        if (newPoint.x + 1 < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) canTurnEast = 0
-        if (newPoint.x < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].southWall) canTurnEast = 0
-      }
-
-      if (currentPoint.facing === WEST) {
-        canTurnNorth = 1
-        canTurnSouth = 1
-        //  Check to see if we can actually turn north or south
-        if (newPoint.y - 2 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) canTurnSouth = 0
-        if (newPoint.y - 1 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 1}`].westWall) canTurnSouth = 0
-        if (newPoint.y + 1 < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) canTurnNorth = 0
-        if (newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].westWall) canTurnNorth = 0
-      }
-
-      //  But, we can't crash into a wall
-      if (currentPoint.facing === NORTH && currentPoint.x <= 0) canTurnWest = 0
-      if (currentPoint.facing === NORTH && currentPoint.x >= features.gridSize - 1) canTurnEast = 0
-      if (currentPoint.facing === EAST && currentPoint.y <= 1) canTurnSouth = 0
-      if (currentPoint.facing === EAST && currentPoint.y >= features.gridSize - 1) canTurnNorth = 0
-      if (currentPoint.facing === SOUTH && currentPoint.x <= 0) canTurnWest = 0
-      if (currentPoint.facing === SOUTH && currentPoint.x >= features.gridSize - 1) canTurnEast = 0
-      if (currentPoint.facing === WEST && currentPoint.y <= 1) canTurnSouth = 0
-      if (currentPoint.facing === WEST && currentPoint.y >= features.gridSize - 1) canTurnNorth = 0
-
-      //  Now we know what our options are, we need to pick one.
-      //  We can control the _chance_ of picking one over the other
-      //  by the number of times we put it into the array
-      const turnOptions = []
-      for (let i = 0; i < canTurnNorth; i++) turnOptions.push(NORTH)
-      for (let i = 0; i < canTurnEast; i++) turnOptions.push(EAST)
-      for (let i = 0; i < canTurnSouth; i++) turnOptions.push(SOUTH)
-      for (let i = 0; i < canTurnWest; i++) turnOptions.push(WEST)
-      newPoint.turnOptions = turnOptions
-
-      //  Now pick the new direction
-      if (turnOptions.length === 0) {
-        //  If we can't turn, check to see if we are going to run into anything, if so then we
-        //  need to mark outselves as ended
-        if (newPoint.facing === NORTH) {
-          //  If we are at the very top, and can't turn, then we are ended
-          if (newPoint.y === features.gridSize - 1) {
-            ended = true
-          } else {
-            //  If we can't turn east or west, or carry on, then we are done for, end here
-            if (features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) ended = true
-          }
-        }
-
-        if (newPoint.facing === EAST) {
-          //  If we are at the very top, and can't turn, then we are ended
-          if (newPoint.x === features.gridSize - 1) {
-            ended = true
-          } else {
-            //  If we can't turn north or south, or carry on, then we are done for, end here
-            if (features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) ended = true
-          }
-        }
-
-        if (newPoint.facing === SOUTH) {
-          //  If we are at the very top, and can't turn, then we are ended
-          if (newPoint.y < 2) {
-            ended = true
-          } else {
-            //  If we can't turn east or west, or carry on, then we are done for, end here
-            if (features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) ended = true
-          }
-        }
-
-        if (newPoint.facing === WEST) {
-          //  If we are at the very top, and can't turn, then we are ended
-          if (newPoint.x < 2) {
-            ended = true
-          } else {
-            //  If we can't turn north or south, or carry on, then we are done for, end here
-            if (features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) ended = true
-          }
-        }
-      } else {
-        newPoint.facing = turnOptions[Math.floor(fxrand() * turnOptions.length)]
-      }
-    }
-
-    //  If we're now facing a new direction then reset the continuous counter
-    if (newPoint.facing !== currentPoint.facing) {
-      newPoint.continuous = 0
-    }
-
-    //  Add the new point to the lines
-    if (!ended) features.line.push(newPoint)
-
-    //  Check to see if we have ended by facing the edge
-    if (newPoint.x === 0 && newPoint.facing === WEST) ended = true
-    if (newPoint.x === features.gridSize - 1 && newPoint.facing === EAST) ended = true
-    if (newPoint.y === 1 && newPoint.facing === SOUTH) ended = true // Special case, don't want to go back down to the start line
-    if (newPoint.y === features.gridSize - 1 && newPoint.facing === NORTH) ended = true
-
-    //  If the length exceeds a ratio of the total grid size then we end
-    totalLength = 0
-    for (const line of features.line) {
-      totalLength += line.continuous
-    }
-    if (totalLength >= features.maxLength) ended = true
-
-    //  If the length is less than the maxLength but we have ended
-    //  that must mean we have failed
-    if (ended && totalLength < features.maxLength) {
-      failed = true
-    }
-
-    //  We need to check if the last point has already been used
-    if (ended && !failed) {
-      let clash = true
-      while (clash) {
-        const lastPoint = features.line[features.line.length - 1]
-        clash = false
-        for (let p = 0; p < features.line.length - 2; p++) {
-          const testPoint = features.line[p]
-          if (lastPoint.x === testPoint.x && lastPoint.y === testPoint.y) {
-            clash = true
-            features.line.pop()
-            break
-          }
-        }
-      }
-
-      //  Rebuild the grid
-      for (let y = 0; y <= features.gridSize; y++) {
-        for (let x = 0; x <= features.gridSize; x++) {
-          const index = `${x},${y}`
-          features.grid[index] = {
-            westWall: false,
-            southWall: false,
-            inside: false
-          }
-        }
-      }
-      for (let p = 0; p < features.line.length - 1; p++) {
-        const testPoint = features.line[p]
-        if (testPoint.facing === NORTH) features.grid[`${testPoint.x},${testPoint.y}`].westWall = true
-        if (testPoint.facing === EAST) features.grid[`${testPoint.x},${testPoint.y}`].southWall = true
-        if (testPoint.facing === SOUTH) features.grid[`${testPoint.x},${testPoint.y - 1}`].westWall = true
-        if (testPoint.facing === WEST) features.grid[`${testPoint.x - 1},${testPoint.y}`].southWall = true
-      }
-    }
-
-    //  See if we have any closed boxes
-    features.finishedLines = []
-    const previousSegment = {
-      start: {
-        x: features.line[0].x,
-        y: features.line[0].y
-      },
-      facing: features.line[0].facing,
-      length: 1
-    }
-    for (let p = 1; p < features.line.length - 1; p++) {
-      const thisSegment = features.line[p]
-      //  If we have turned a corner then, wrap up the previous segment, store it
-      //  and start a new one
-      if (thisSegment.continuous === 0) {
-        previousSegment.end = {
-          x: thisSegment.x,
-          y: thisSegment.y
-        }
-        features.finishedLines.push(JSON.parse(JSON.stringify(previousSegment)))
-        //  make a new previous segment
-        previousSegment.start = {
-          x: thisSegment.x,
-          y: thisSegment.y
-        }
-        previousSegment.facing = thisSegment.facing
-        previousSegment.length = 1
-      } else {
-        previousSegment.length++
-      }
-    }
-    //  Now add the final line
-    previousSegment.end = {
-      x: features.line[features.line.length - 1].x,
-      y: features.line[features.line.length - 1].y,
-      length: features.line[features.line.length - 1].continuous
-    }
-    features.finishedLines.push(previousSegment)
-
-    // const boxLines = []
-    // const boxes = []
-
-    //  This allows us to exit if things never work
-    if (failed) {
-      exitCount++
-      //  Reset and try again
-      features.startPosition = {
-        x: Math.min(Math.max(1, Math.floor((fxrand() * features.gridSize / 2) + (fxrand() * features.gridSize / 2))), features.gridSize - 2),
-        y: 0,
-        facing: NORTH,
-        continuous: 0
-      }
-      features.line = []
-      features.line.push(features.startPosition)
-
-      //  Empty the grid
-      for (let y = 0; y <= features.gridSize; y++) {
-        for (let x = 0; x <= features.gridSize; x++) {
-          const index = `${x},${y}`
-          features.grid[index] = {
-            westWall: false,
-            southWall: false,
-            inside: false
-          }
-        }
-      }
-
-      ended = false
+    while (failed === false && ended === false && exitCount < 100000) {
+      //  we haven't failed yet!
       failed = false
+      //  Grab the current position
+      const currentPoint = features.line[features.line.length - 1]
+
+      //  Record the walls used into the grid
+      try {
+        if (currentPoint.facing === NORTH && currentPoint.y <= features.gridSize) features.grid[`${currentPoint.x},${currentPoint.y}`].westWall = true
+        if (currentPoint.facing === EAST && currentPoint.x <= features.gridSize) features.grid[`${currentPoint.x},${currentPoint.y}`].southWall = true
+        if (currentPoint.facing === SOUTH && currentPoint.y - 1 >= 0) features.grid[`${currentPoint.x},${currentPoint.y - 1}`].westWall = true
+        if (currentPoint.facing === WEST && currentPoint.x - 1 >= 0) features.grid[`${currentPoint.x - 1},${currentPoint.y}`].southWall = true
+      } catch (er) {}
+
+      //  Set the new point to the current postion
+      const newPoint = {
+        x: currentPoint.x,
+        y: currentPoint.y,
+        facing: currentPoint.facing,
+        continuous: currentPoint.continuous + 1
+      }
+      //  Move us
+      if (currentPoint.facing === NORTH) newPoint.y += 1
+      if (currentPoint.facing === EAST) newPoint.x += 1
+      if (currentPoint.facing === SOUTH) newPoint.y -= 1
+      if (currentPoint.facing === WEST) newPoint.x -= 1
+
+      //  Work out which way we should turn
+      let chanceToTurn = 0
+      //  Add a 10% chance to turn for the length of the line
+      chanceToTurn += newPoint.continuous * 10
+      //  Increase the chance to turn as we get closer to the edge
+      //  TODO:
+      //  Set the chance to 100% if we have hit the edge
+      if (newPoint.facing === NORTH && newPoint.y === features.gridSize - 1) chanceToTurn = 100
+      if (newPoint.facing === EAST && newPoint.x === features.gridSize - 1) chanceToTurn = 100
+      if (newPoint.facing === SOUTH && newPoint.y === 1) chanceToTurn = 100
+      if (newPoint.facing === WEST && newPoint.x === 0) chanceToTurn = 100
+
+      //  Increase the chance to turn if we are approaching already filled in walls
+      try {
+        if (newPoint.facing === NORTH && newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) chanceToTurn = 100
+        if (newPoint.facing === EAST && newPoint.x < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) chanceToTurn = 100
+        if (newPoint.facing === SOUTH && newPoint.y > 2 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) chanceToTurn = 100
+        if (newPoint.facing === WEST && newPoint.x > 2 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) chanceToTurn = 100
+      } catch (er) {}
+
+      newPoint.chanceToTurn = chanceToTurn
+
+      //  Now roll the dice to see if we turn
+      if (fxrand() <= chanceToTurn / 100) {
+        //  Now go through what where when and how we may turn, there's all sorts
+        //  of super cool algorithms we could use to do this, but we're going to
+        //  do it the old Choose Your Own Adventure way. If we need to we can wrap
+        //  up a couple of checks in a function, but probably not
+        //  Facing north first
+        let canTurnNorth = 0
+        let canTurnEast = 0
+        let canTurnSouth = 0
+        let canTurnWest = 0
+
+        if (currentPoint.facing === NORTH) {
+          canTurnEast = 1
+          canTurnWest = 1
+          //  Check to see if we can actually turn east or west
+          try {
+            if (newPoint.x - 2 >= 0 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) canTurnWest = 0
+            if (newPoint.x - 1 >= 0 && features.grid[`${newPoint.x - 1},${newPoint.y}`].southWall) canTurnWest = 0
+            if (newPoint.x + 1 < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) canTurnEast = 0
+            if (newPoint.x < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].southWall) canTurnEast = 0
+          } catch (er) {}
+        }
+
+        if (currentPoint.facing === EAST) {
+          canTurnNorth = 1
+          canTurnSouth = 1
+          //  Check to see if we can actually turn north or south
+          try {
+            if (newPoint.y - 2 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) canTurnSouth = 0
+            if (newPoint.y - 1 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 1}`].westWall) canTurnSouth = 0
+            if (newPoint.y + 1 < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) canTurnNorth = 0
+            if (newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].westWall) canTurnNorth = 0
+          } catch (er) {}
+        }
+
+        if (currentPoint.facing === SOUTH) {
+          canTurnEast = 1
+          canTurnWest = 1
+          //  Check to see if we can actually turn east or west
+          try {
+            if (newPoint.x - 2 >= 0 && features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) canTurnWest = 0
+            if (newPoint.x - 1 >= 0 && features.grid[`${newPoint.x - 1},${newPoint.y}`].southWall) canTurnWest = 0
+            if (newPoint.x + 1 < features.gridSize && features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) canTurnEast = 0
+            if (newPoint.x < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].southWall) canTurnEast = 0
+          } catch (er) {}
+        }
+
+        if (currentPoint.facing === WEST) {
+          canTurnNorth = 1
+          canTurnSouth = 1
+          //  Check to see if we can actually turn north or south
+          try {
+            if (newPoint.y - 2 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) canTurnSouth = 0
+            if (newPoint.y - 1 >= 0 && features.grid[`${newPoint.x},${newPoint.y - 1}`].westWall) canTurnSouth = 0
+            if (newPoint.y + 1 < features.gridSize && features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) canTurnNorth = 0
+            if (newPoint.y < features.gridSize && features.grid[`${newPoint.x},${newPoint.y}`].westWall) canTurnNorth = 0
+          } catch (er) {}
+        }
+
+        //  But, we can't crash into a wall
+        if (currentPoint.facing === NORTH && currentPoint.x <= 0) canTurnWest = 0
+        if (currentPoint.facing === NORTH && currentPoint.x >= features.gridSize - 1) canTurnEast = 0
+        if (currentPoint.facing === EAST && currentPoint.y <= 1) canTurnSouth = 0
+        if (currentPoint.facing === EAST && currentPoint.y >= features.gridSize - 1) canTurnNorth = 0
+        if (currentPoint.facing === SOUTH && currentPoint.x <= 0) canTurnWest = 0
+        if (currentPoint.facing === SOUTH && currentPoint.x >= features.gridSize - 1) canTurnEast = 0
+        if (currentPoint.facing === WEST && currentPoint.y <= 1) canTurnSouth = 0
+        if (currentPoint.facing === WEST && currentPoint.y >= features.gridSize - 1) canTurnNorth = 0
+
+        //  Now we know what our options are, we need to pick one.
+        //  We can control the _chance_ of picking one over the other
+        //  by the number of times we put it into the array
+        const turnOptions = []
+        for (let i = 0; i < canTurnNorth; i++) turnOptions.push(NORTH)
+        for (let i = 0; i < canTurnEast; i++) turnOptions.push(EAST)
+        for (let i = 0; i < canTurnSouth; i++) turnOptions.push(SOUTH)
+        for (let i = 0; i < canTurnWest; i++) turnOptions.push(WEST)
+        newPoint.turnOptions = turnOptions
+
+        //  Now pick the new direction
+        if (turnOptions.length === 0) {
+          //  If we can't turn, check to see if we are going to run into anything, if so then we
+          //  need to mark outselves as ended
+          if (newPoint.facing === NORTH) {
+            //  If we are at the very top, and can't turn, then we are ended
+            if (newPoint.y === features.gridSize - 1) {
+              ended = true
+            } else {
+              //  If we can't turn east or west, or carry on, then we are done for, end here
+              if (features.grid[`${newPoint.x},${newPoint.y + 1}`].westWall) ended = true
+            }
+          }
+
+          if (newPoint.facing === EAST) {
+            //  If we are at the very top, and can't turn, then we are ended
+            if (newPoint.x === features.gridSize - 1) {
+              ended = true
+            } else {
+              //  If we can't turn north or south, or carry on, then we are done for, end here
+              if (features.grid[`${newPoint.x + 1},${newPoint.y}`].southWall) ended = true
+            }
+          }
+
+          if (newPoint.facing === SOUTH) {
+            //  If we are at the very top, and can't turn, then we are ended
+            if (newPoint.y < 2) {
+              ended = true
+            } else {
+              //  If we can't turn east or west, or carry on, then we are done for, end here
+              if (features.grid[`${newPoint.x},${newPoint.y - 2}`].westWall) ended = true
+            }
+          }
+
+          if (newPoint.facing === WEST) {
+            //  If we are at the very top, and can't turn, then we are ended
+            if (newPoint.x < 2) {
+              ended = true
+            } else {
+              //  If we can't turn north or south, or carry on, then we are done for, end here
+              if (features.grid[`${newPoint.x - 2},${newPoint.y}`].southWall) ended = true
+            }
+          }
+        } else {
+          newPoint.facing = turnOptions[Math.floor(fxrand() * turnOptions.length)]
+        }
+      }
+
+      //  If we're now facing a new direction then reset the continuous counter
+      if (newPoint.facing !== currentPoint.facing) {
+        newPoint.continuous = 0
+      }
+
+      //  Add the new point to the lines
+      if (!ended) features.line.push(newPoint)
+
+      //  Check to see if we have ended by facing the edge
+      if (newPoint.x <= 0 && newPoint.facing === WEST) ended = true
+      if (newPoint.x >= features.gridSize - 1 && newPoint.facing === EAST) ended = true
+      if (newPoint.y <= 1 && newPoint.facing === SOUTH) ended = true // Special case, don't want to go back down to the start line
+      if (newPoint.y >= features.gridSize - 1 && newPoint.facing === NORTH) ended = true
+
+      //  If the length exceeds a ratio of the total grid size then we end
+      totalLength = 0
+      for (const line of features.line) {
+        totalLength += line.continuous
+      }
+      if (totalLength >= features.maxLength) ended = true
+
+      //  If the length is less than the maxLength but we have ended
+      //  that must mean we have failed
+      if (ended && totalLength < features.maxLength) {
+        failed = true
+      }
+
+      //  We need to check if the last point has already been used
+      if (ended && !failed) {
+        let clash = true
+        while (clash) {
+          const lastPoint = features.line[features.line.length - 1]
+          clash = false
+          for (let p = 0; p < features.line.length - 2; p++) {
+            const testPoint = features.line[p]
+            if (lastPoint.x === testPoint.x && lastPoint.y === testPoint.y) {
+              clash = true
+              features.line.pop()
+              break
+            }
+          }
+        }
+
+        //  Rebuild the grid
+        for (let y = 0; y < features.gridSize; y++) {
+          for (let x = 0; x < features.gridSize; x++) {
+            const index = `${x},${y}`
+            features.grid[index] = {
+              westWall: false,
+              southWall: false,
+              inside: false
+            }
+          }
+        }
+        for (let p = 0; p < features.line.length - 1; p++) {
+          const testPoint = features.line[p]
+          if (testPoint.facing === NORTH) features.grid[`${testPoint.x},${testPoint.y}`].westWall = true
+          if (testPoint.facing === EAST) features.grid[`${testPoint.x},${testPoint.y}`].southWall = true
+          if (testPoint.facing === SOUTH) features.grid[`${testPoint.x},${testPoint.y - 1}`].westWall = true
+          if (testPoint.facing === WEST) features.grid[`${testPoint.x - 1},${testPoint.y}`].southWall = true
+        }
+      }
+
+      //  See if we have any closed boxes
+      features.finishedLines = []
+      const previousSegment = {
+        start: {
+          x: features.line[0].x,
+          y: features.line[0].y
+        },
+        facing: features.line[0].facing,
+        length: 1
+      }
+      for (let p = 1; p < features.line.length - 1; p++) {
+        const thisSegment = features.line[p]
+        //  If we have turned a corner then, wrap up the previous segment, store it
+        //  and start a new one
+        if (thisSegment.continuous === 0) {
+          previousSegment.end = {
+            x: thisSegment.x,
+            y: thisSegment.y
+          }
+          features.finishedLines.push(JSON.parse(JSON.stringify(previousSegment)))
+          //  make a new previous segment
+          previousSegment.start = {
+            x: thisSegment.x,
+            y: thisSegment.y
+          }
+          previousSegment.facing = thisSegment.facing
+          previousSegment.length = 1
+        } else {
+          previousSegment.length++
+        }
+      }
+      //  Now add the final line
+      previousSegment.end = {
+        x: features.line[features.line.length - 1].x,
+        y: features.line[features.line.length - 1].y,
+        length: features.line[features.line.length - 1].continuous
+      }
+      features.finishedLines.push(previousSegment)
+
+      //  This allows us to exit if things never work
+      if (failed) {
+        exitCount++
+        //  Reset and try again
+        features.startPosition = {
+          x: Math.min(Math.max(1, Math.floor((fxrand() * features.gridSize / 2) + (fxrand() * features.gridSize / 2))), features.gridSize - 2),
+          y: 0,
+          facing: NORTH,
+          continuous: 0
+        }
+        features.line = []
+        features.line.push(features.startPosition)
+
+        //  Empty the grid
+        for (let y = 0; y < features.gridSize; y++) {
+          for (let x = 0; x < features.gridSize; x++) {
+            const index = `${x},${y}`
+            features.grid[index] = {
+              westWall: false,
+              southWall: false,
+              inside: false
+            }
+          }
+        }
+
+        ended = false
+        failed = false
+      }
+    }
+
+    for (let l = 0; l < features.finishedLines.length - 3; l++) {
+      const line1 = features.finishedLines[l]
+      const line2 = features.finishedLines[l + 1]
+      const line3 = features.finishedLines[l + 2]
+      const line4 = features.finishedLines[l + 3]
+      const facingCheck = []
+      facingCheck.push(line1.facing)
+      facingCheck.push(line2.facing)
+      facingCheck.push(line3.facing)
+      facingCheck.push(line4.facing)
+      if (facingCheck.includes(NORTH) && facingCheck.includes(EAST) && facingCheck.includes(SOUTH) && facingCheck.includes(WEST)) {
+        if (line1.length > line3.length && line4.length > line2.length) {
+          const newBox = {}
+          if (line1.facing === NORTH || line1.facing === SOUTH) {
+            //  Do the left right sides
+            newBox.left = Math.min(line1.start.x, line3.start.x)
+            newBox.right = Math.max(line1.start.x, line3.start.x)
+            //  Do the top bottom sides
+            newBox.top = Math.max(line2.start.y, line4.start.y)
+            newBox.bottom = Math.min(line2.start.y, line4.start.y)
+          } else {
+            //  Do the left right sides
+            newBox.left = Math.min(line2.start.x, line4.start.x)
+            newBox.right = Math.max(line2.start.x, line4.start.x)
+            //  Do the top bottom sides
+            newBox.top = Math.max(line1.start.y, line3.start.y)
+            newBox.bottom = Math.min(line1.start.y, line3.start.y)
+          }
+          newBox.width = newBox.right - newBox.left
+          newBox.height = newBox.top - newBox.bottom
+          newBox.area = newBox.width * newBox.height
+          const angles = [0, 30, 45, 60, 90]
+          const boxColours = ['magenta', 'cyan', 'yellow']
+          newBox.angle = angles[Math.floor(fxrand() * angles.length)]
+          newBox.colour = boxColours[Math.floor(fxrand() * boxColours.length)]
+          newBox.style = 'box'
+          features.boxes.push(newBox)
+        }
+      }
     }
   }
 
@@ -456,9 +510,52 @@ const makeFeatures = () => {
     }
     features.wonkyLines.push(newLine)
   })
-  console.log('exitCount: ', exitCount)
-  console.log('totalLength: ', totalLength)
-  console.log('features.maxLength: ', features.maxLength)
+
+  //  Now find the empty spaces
+  let spaceNeeded = 5
+  features.dotted = []
+  const dotLimit = 6
+  while (spaceNeeded > 0) {
+    for (let y = 0; y < features.gridSize; y++) {
+      if (y <= spaceNeeded + 2 || features.gridSize - y < (spaceNeeded + 3)) continue
+      for (let x = 0; x < features.gridSize; x++) {
+        if (x <= spaceNeeded + 1 || features.gridSize - x < (spaceNeeded + 3)) continue
+        let allClear = true
+        for (let scanY = y - spaceNeeded; scanY < y + spaceNeeded + 2; scanY++) {
+          for (let scanX = x - spaceNeeded; scanX < x + spaceNeeded + 2; scanX++) {
+            const index = `${scanX},${scanY}`
+            //  If we are on not on the right hand side, then also check the southWall
+            if (scanX < x + spaceNeeded + 1 && features.grid[index].southWall) allClear = false
+            if (scanY < y + spaceNeeded + 1 && features.grid[index].westWall) allClear = false
+          }
+        }
+        const dotAngles = [0, 30, 45, 60, 90]
+        const dotColours = ['magenta', 'cyan', 'yellow']
+        if (allClear && !features.grid[`${x},${y}`].dotted) {
+          features.grid[`${x},${y}`].dotted = true
+          features.dotted.push({
+            x,
+            y,
+            angle: dotAngles[Math.floor(fxrand() * dotAngles.length)],
+            colour: dotColours[Math.floor(fxrand() * dotColours.length)],
+            spaceNeeded: Math.floor(spaceNeeded)
+          })
+        }
+      }
+    }
+
+    spaceNeeded--
+  }
+  features.dotted = features.dotted.map(value => ({
+    value,
+    sort: fxrand()
+  }))
+    .sort((a, b) => a.sort - b.sort)
+    .map(({
+      value
+    }) => value).slice(0, Math.min(dotLimit, features.dotted.length))
+
+  features.spaceNeeded = spaceNeeded
   console.log(features)
 }
 
@@ -540,6 +637,7 @@ const layoutCanvas = async () => {
 }
 
 const drawCanvas = async () => {
+  const startDraw = new Date().getTime()
   //  Let the preloader know that we've hit this function at least once
   drawn = true
   //  Make sure there's only one nextFrame to be called
@@ -629,6 +727,110 @@ const drawCanvas = async () => {
   }
   ctx.globalCompositeOperation = 'source-over'
 
+  //  Fill in the boxes
+  for (const box of features.boxes) {
+    const tinyOffset = {
+      x: w / 75,
+      y: -h / 100
+    }
+
+    const left = box.left * cellSize + borderOffset.x + tinyOffset.x
+    const right = box.left * cellSize + borderOffset.x + (box.width * cellSize) + tinyOffset.x
+    const top = h - (box.top * cellSize + borderOffset.y) + tinyOffset.y
+    const bottom = h - (box.top * cellSize + borderOffset.y - (box.height * cellSize)) + tinyOffset.y
+    const width = right - left
+    const height = bottom - top
+
+    if (box.style === 'box') {
+      ctx.fillStyle = box.colour
+      ctx.globalCompositeOperation = 'multiply'
+      ctx.globalAlpha = 0.7
+      ctx.fillRect(left + tinyOffset.x / 4, top - tinyOffset.y / 3, width, height)
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.globalAlpha = 1.0
+    }
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(left, top)
+    ctx.lineTo(right, top)
+    ctx.lineTo(right, bottom)
+    ctx.lineTo(left, bottom)
+    ctx.lineTo(left, top)
+    ctx.clip()
+
+    ctx.save()
+    ctx.translate((left + (width / 2)), (top + (height / 2)))
+    ctx.rotate(box.angle * Math.PI / 180)
+    const outsideSize = Math.max(width, height)
+    ctx.lineWidth = w / 800
+    ctx.strokeStyle = 'black'
+    let y = -outsideSize
+    while (y <= outsideSize * 2) {
+      ctx.beginPath()
+      let x = -outsideSize
+      ctx.moveTo(x, y)
+      while (x <= outsideSize * 2) {
+        ctx.lineTo(x + (noise.perlin2(x / 10, y / 10) * w / 2000), y + (noise.perlin2(x / 10, y / 10) * w / 2000))
+        x += ctx.lineWidth * 2
+      }
+      ctx.stroke()
+      y += ctx.lineWidth * 4
+    }
+    ctx.restore()
+    ctx.restore()
+  }
+
+  //  Do the dots
+  for (const dotBox of features.dotted) {
+    const tinyOffset = {
+      x: w / 75,
+      y: -h / 100
+    }
+    tinyOffset.x += (noise.perlin2(dotBox.x / 12, dotBox.y / 9) * w / 3)
+    tinyOffset.y += (noise.perlin2(dotBox.x / 8, dotBox.y / 11) * w / 4)
+
+    const left = (dotBox.x - dotBox.spaceNeeded) * cellSize + borderOffset.x + tinyOffset.x
+    const right = (dotBox.x + dotBox.spaceNeeded + 1) * cellSize + borderOffset.x + tinyOffset.x
+    const top = h - ((dotBox.y + dotBox.spaceNeeded + 1) * cellSize + borderOffset.y) + tinyOffset.y
+    const bottom = h - ((dotBox.y - dotBox.spaceNeeded) * cellSize + borderOffset.y) + tinyOffset.y
+    const width = right - left
+    const height = bottom - top
+
+    ctx.save()
+    ctx.beginPath()
+    ctx.moveTo(left, top)
+    ctx.lineTo(right, top)
+    ctx.lineTo(right, bottom)
+    ctx.lineTo(left, bottom)
+    ctx.lineTo(left, top)
+    ctx.clip()
+
+    ctx.save()
+    ctx.translate((left + (width / 2)), (top + (height / 2)))
+    ctx.rotate(dotBox.angle * Math.PI / 180)
+    const outsideSize = Math.max(width, height)
+    const radius = w / 400
+    let y = -outsideSize
+    while (y <= outsideSize * 2) {
+      let x = -outsideSize
+      while (x <= outsideSize * 2) {
+        ctx.fillStyle = dotBox.colour
+        ctx.beginPath()
+        ctx.arc(x + (noise.perlin2(x / 10, y / 10) * w / 1000), y + (noise.perlin2(x / 10, y / 10) * w / 1000), radius, 0, 2 * Math.PI)
+        ctx.fill()
+        ctx.fillStyle = 'black'
+        ctx.beginPath()
+        ctx.arc(x + (noise.perlin2(x / 10, y / 10) * w / 1000) - w / 800, y + (noise.perlin2(x / 10, y / 10) * w / 800) - h / 2000, radius, 0, 2 * Math.PI)
+        ctx.fill()
+        x += radius * 4
+      }
+      ctx.stroke()
+      y += radius * 4
+    }
+    ctx.restore()
+    ctx.restore()
+  }
   if (features.debug) {
     //  Draw the walls
     ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)'
@@ -649,8 +851,16 @@ const drawCanvas = async () => {
         ctx.stroke()
       }
     }
+
+    //  Draw the boxes
+    ctx.fillStyle = 'rgba(0, 0, 255, 0.2)'
+    for (const box of features.boxes) {
+      ctx.fillRect(box.left * cellSize + borderOffset.x, h - (box.top * cellSize + borderOffset.y), box.width * cellSize, box.height * cellSize)
+    }
   }
 
+  const endDraw = new Date().getTime()
+  console.log((endDraw - startDraw) + 'ms')
   //  Now do it all over again
   // nextFrame = window.requestAnimationFrame(drawCanvas)
 }
